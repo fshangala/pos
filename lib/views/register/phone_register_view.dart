@@ -1,0 +1,190 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../core/widgets/phone_product_tile.dart';
+import '../../core/widgets/pos_search_bar.dart';
+import '../../core/widgets/pos_sign_out_button.dart';
+import '../../core/widgets/sticky_bottom_cart_bar.dart';
+import '../../viewmodels/pos_app_viewmodel.dart';
+import '../../viewmodels/pos_register_viewmodel.dart';
+import '../checkout/phone_checkout_view.dart';
+import 'widgets/barcode_scanner_modal.dart';
+import 'widgets/cart_bottom_sheet.dart';
+import 'widgets/held_orders_modal.dart';
+
+class PhoneRegisterView extends StatefulWidget {
+  const PhoneRegisterView({
+    required this.counterId,
+    required this.bartenderId,
+    super.key,
+  });
+
+  final String counterId;
+  final String bartenderId;
+
+  @override
+  State<PhoneRegisterView> createState() => _PhoneRegisterViewState();
+}
+
+class _PhoneRegisterViewState extends State<PhoneRegisterView> {
+  bool _didLoadCatalog = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_didLoadCatalog) {
+      _didLoadCatalog = true;
+      context.read<PosRegisterViewModel>().loadProducts(widget.counterId);
+    }
+  }
+
+  Future<void> _scanBarcode() async {
+    final barcode = await showBarcodeScannerModal(context);
+    if (!mounted || barcode == null) return;
+    final viewModel = context.read<PosRegisterViewModel>();
+    final product = viewModel.findByBarcode(barcode);
+    if (product == null) {
+      _showMessage('No product matches this barcode.');
+    } else if (!viewModel.addProduct(product)) {
+      _showMessage('There is not enough local stock for this item.');
+    } else {
+      _showMessage('${product.inventoryName} added to the order.');
+    }
+  }
+
+  Future<void> _openCart() async {
+    final result = await showCartBottomSheet(
+      context,
+      counterId: widget.counterId,
+      bartenderId: widget.bartenderId,
+    );
+    if (!mounted || result == null) return;
+    if (result == CartSheetResult.held) {
+      _showMessage('Order held on this device.');
+      return;
+    }
+    final order = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => PhoneCheckoutView(
+          counterId: widget.counterId,
+          bartenderId: widget.bartenderId,
+        ),
+      ),
+    );
+    if (!mounted || order != true) return;
+    await context.read<PosRegisterViewModel>().loadProducts(widget.counterId);
+    if (mounted) _showMessage('Order saved on this device.');
+  }
+
+  Future<void> _openHeldOrders() async {
+    final resumed = await showHeldOrdersModal(context);
+    if (!mounted || !resumed) return;
+    _showMessage('Held order resumed. Check stock before checkout.');
+  }
+
+  Future<void> _refreshCatalog() async {
+    final appViewModel = context.read<PosAppViewModel>();
+    await appViewModel.refreshCatalog();
+    if (!mounted) return;
+    await context.read<PosRegisterViewModel>().loadProducts(widget.counterId);
+    if (!mounted) return;
+    final message = appViewModel.refreshMessage;
+    if (message != null) _showMessage(message);
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Consumer<PosRegisterViewModel>(
+      builder: (context, viewModel, _) => Scaffold(
+        appBar: AppBar(
+          title: const Text('Register'),
+          actions: [
+            IconButton(
+              tooltip: 'Held orders',
+              onPressed: _openHeldOrders,
+              icon: const Icon(Icons.pause_circle_outline_rounded),
+            ),
+            IconButton(
+              tooltip: 'Refresh catalog from server',
+              onPressed: _refreshCatalog,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+            const PosSignOutButton(),
+          ],
+        ),
+        body: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              child: PosSearchBar(
+                onChanged: viewModel.setSearchQuery,
+                onScan: _scanBarcode,
+              ),
+            ),
+            if (viewModel.errorMessage != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  viewModel.errorMessage!,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+              ),
+            Expanded(
+              child: viewModel.isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : viewModel.products.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          'No sellable products are available at this counter.',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyLarge,
+                        ),
+                      ),
+                    )
+                  : GridView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      itemCount: viewModel.products.length,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                            childAspectRatio: 0.86,
+                          ),
+                      itemBuilder: (context, index) {
+                        final product = viewModel.products[index];
+                        return PhoneProductTile(
+                          product: product,
+                          onTap: () {
+                            if (!viewModel.addProduct(product)) {
+                              _showMessage(
+                                'There is not enough local stock for this item.',
+                              );
+                            }
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+        bottomNavigationBar: StickyBottomCartBar(
+          itemCount: viewModel.itemCount,
+          total: viewModel.total,
+          onTap: _openCart,
+        ),
+      ),
+    );
+  }
+}
