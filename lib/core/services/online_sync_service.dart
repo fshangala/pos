@@ -2,7 +2,6 @@ import 'package:logger/logger.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../models/active_listing_model.dart';
 import '../../models/bartender_model.dart';
 import '../../models/counter_station_model.dart';
 import '../../models/counter_stock_allocation_model.dart';
@@ -69,7 +68,7 @@ class OnlineSyncService {
         throw StateError('The bartender assigned counter is unavailable.');
       }
       final station = CounterStationModel.fromMap(stationRows.single);
-      final allocations = stockRows
+      final stockEntries = stockRows
           .map(
             (row) => CounterStockAllocationModel.fromCounterStockView(
               row,
@@ -77,42 +76,18 @@ class OnlineSyncService {
             ),
           )
           .toList(growable: false);
-      final listingsByInventory = <String, Map<String, Object?>>{};
-      for (final row in stockRows) {
-        if (row['listing_id'] == null || row['price'] == null) continue;
-        final listing = ActiveListingModel.fromCounterStockView(row);
-        listingsByInventory[listing.inventoryId] = listing.toMap();
-      }
 
       final db = await _localDb.database;
       await db.transaction((transaction) async {
         await transaction.delete(
-          'local_counter_stock',
+          'local_counter_stock_cache',
           where: 'counter_id = ?',
           whereArgs: [counterId],
         );
-
-        final inventoryIds = allocations
-            .map((item) => item.inventoryId)
-            .toSet();
-        for (final inventoryId in inventoryIds) {
-          await transaction.delete(
-            'local_active_listings',
-            where: 'inventory_id = ?',
-            whereArgs: [inventoryId],
-          );
-        }
-        for (final allocation in allocations) {
+        for (final stock in stockEntries) {
           await transaction.insert(
-            'local_counter_stock',
-            allocation.toMap(),
-            conflictAlgorithm: ConflictAlgorithm.replace,
-          );
-        }
-        for (final listing in listingsByInventory.values) {
-          await transaction.insert(
-            'local_active_listings',
-            listing,
+            'local_counter_stock_cache',
+            stock.toMap(),
             conflictAlgorithm: ConflictAlgorithm.replace,
           );
         }

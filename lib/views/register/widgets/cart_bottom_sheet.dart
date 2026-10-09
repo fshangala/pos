@@ -105,11 +105,14 @@ class _CartBottomSheetState extends State<CartBottomSheet> {
                   itemBuilder: (context, index) {
                     final item = viewModel.cart[index];
                     return CartItemRow(
+                      key: ValueKey(item.inventoryId),
                       item: item,
                       onDecrement: () =>
                           viewModel.changeQuantity(item.inventoryId, -1),
                       onIncrement: () =>
                           viewModel.changeQuantity(item.inventoryId, 1),
+                      onSetQuantity: (quantity) =>
+                          viewModel.setQuantity(item.inventoryId, quantity),
                       onRemove: () => viewModel.removeItem(item.inventoryId),
                     );
                   },

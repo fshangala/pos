@@ -36,7 +36,7 @@ class LocalDbService {
       final dbPath = await getDatabasesPath();
       return await openDatabase(
         path.join(dbPath, 'pos_local.db'),
-        version: 4,
+        version: 5,
         onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
         onCreate: _createSchema,
         onUpgrade: _upgradeSchema,
@@ -60,47 +60,7 @@ class LocalDbService {
         is_active INTEGER NOT NULL DEFAULT 1
       )
     ''');
-    await db.execute('''
-      CREATE TABLE local_active_listings (
-        listing_id TEXT PRIMARY KEY,
-        inventory_id TEXT NOT NULL,
-        inventory_name TEXT NOT NULL,
-        barcode TEXT,
-        price REAL NOT NULL,
-        active INTEGER NOT NULL DEFAULT 1,
-        synced_at TEXT NOT NULL
-      )
-    ''');
-    await db.execute('''
-      CREATE TABLE local_counter_stock (
-        counter_stock_id TEXT PRIMARY KEY,
-        id TEXT NOT NULL UNIQUE,
-        counter_id TEXT NOT NULL,
-        counter_name TEXT NOT NULL,
-        stock_item_id TEXT NOT NULL,
-        stock_order_id TEXT,
-        inventory_id TEXT NOT NULL,
-        inventory_name TEXT NOT NULL,
-        barcode TEXT,
-        description TEXT,
-        listing_id TEXT,
-        price REAL,
-        quantity REAL NOT NULL,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        assigned_counter_id TEXT NOT NULL,
-        units_sold REAL NOT NULL DEFAULT 0,
-        out_of_stock INTEGER NOT NULL DEFAULT 0,
-        remote_remaining_units REAL NOT NULL,
-        units_per_quantity REAL NOT NULL,
-        total_assigned_units REAL NOT NULL,
-        local_units_sold REAL NOT NULL DEFAULT 0,
-        low_stock_threshold REAL NOT NULL DEFAULT 1,
-        is_low_stock INTEGER NOT NULL DEFAULT 0,
-        synced_at TEXT NOT NULL,
-        UNIQUE(counter_id, stock_item_id)
-      )
-    ''');
+    await _createCounterStockCache(db);
     await db.execute('''
       CREATE TABLE local_bartenders (
         id TEXT PRIMARY KEY,
@@ -152,6 +112,14 @@ class LocalDbService {
     ''');
     await db.execute(
       'CREATE INDEX local_orders_created_at_idx ON local_orders(created_at)',
+    );
+    await db.execute(
+      'CREATE INDEX local_counter_stock_counter_barcode_idx '
+      'ON local_counter_stock_cache(counter_id, barcode)',
+    );
+    await db.execute(
+      'CREATE INDEX local_counter_stock_counter_inventory_idx '
+      'ON local_counter_stock_cache(counter_id, inventory_id)',
     );
     await _createLocalCounterStockView(db);
   }
@@ -250,7 +218,67 @@ class LocalDbService {
         'CREATE UNIQUE INDEX local_counter_stock_id_idx ON local_counter_stock(id)',
       );
     }
+    if (oldVersion < 5) {
+      await db.execute('DROP VIEW IF EXISTS local_v_counter_stock');
+      await db.execute(
+        'ALTER TABLE local_counter_stock RENAME TO local_counter_stock_legacy',
+      );
+      await db.execute('DROP TABLE IF EXISTS local_active_listings');
+      await _createCounterStockCache(db);
+      await db.execute('''
+        INSERT INTO local_counter_stock_cache (
+          id, counter_id, counter_name, stock_item_id, stock_order_id,
+          inventory_id, units_per_quantity, inventory_name, barcode,
+          description, listing_id, price, quantity, low_stock_threshold,
+          created_at, updated_at, assigned_counter_id, units_sold,
+          out_of_stock, synced_at
+        )
+        SELECT id, counter_id, counter_name, stock_item_id, stock_order_id,
+               inventory_id, units_per_quantity, inventory_name, barcode,
+               description, listing_id, price, quantity, low_stock_threshold,
+               created_at, updated_at, assigned_counter_id, units_sold,
+               out_of_stock, synced_at
+        FROM local_counter_stock_legacy
+      ''');
+      await db.execute('DROP TABLE local_counter_stock_legacy');
+      await db.execute(
+        'CREATE INDEX local_counter_stock_counter_barcode_idx '
+        'ON local_counter_stock_cache(counter_id, barcode)',
+      );
+      await db.execute(
+        'CREATE INDEX local_counter_stock_counter_inventory_idx '
+        'ON local_counter_stock_cache(counter_id, inventory_id)',
+      );
+    }
     await _createLocalCounterStockView(db);
+  }
+
+  Future<void> _createCounterStockCache(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE local_counter_stock_cache (
+        id TEXT PRIMARY KEY,
+        counter_id TEXT NOT NULL,
+        counter_name TEXT NOT NULL,
+        stock_item_id TEXT NOT NULL,
+        stock_order_id TEXT,
+        inventory_id TEXT NOT NULL,
+        units_per_quantity REAL NOT NULL,
+        inventory_name TEXT NOT NULL,
+        barcode TEXT,
+        description TEXT,
+        listing_id TEXT,
+        price REAL,
+        quantity REAL NOT NULL,
+        low_stock_threshold REAL NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        assigned_counter_id TEXT NOT NULL,
+        units_sold REAL NOT NULL DEFAULT 0,
+        out_of_stock INTEGER NOT NULL DEFAULT 0,
+        synced_at TEXT NOT NULL,
+        UNIQUE(counter_id, stock_item_id)
+      )
+    ''');
   }
 
   Future<void> _createLocalCounterStockView(DatabaseExecutor db) async {
@@ -282,7 +310,7 @@ class LocalDbService {
                THEN 1
                ELSE 0
              END AS out_of_stock
-      FROM local_counter_stock AS cs
+      FROM local_counter_stock_cache AS cs
       LEFT JOIN (
         SELECT o.counter_id,
                oi.stock_item_id,

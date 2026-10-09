@@ -17,12 +17,12 @@ class CartItemModel {
 
   double get subtotal => unitPrice * units;
 
-  CartItemModel copyWith({int? units}) => CartItemModel(
+  CartItemModel copyWith({int? units, double? availableUnits}) => CartItemModel(
     listingId: listingId,
     inventoryId: inventoryId,
     inventoryName: inventoryName,
     unitPrice: unitPrice,
-    availableUnits: availableUnits,
+    availableUnits: availableUnits ?? this.availableUnits,
     units: units ?? this.units,
   );
 }

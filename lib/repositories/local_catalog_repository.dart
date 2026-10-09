@@ -17,26 +17,7 @@ class LocalCatalogRepository {
   Future<List<RegisterProductModel>> getProducts(String counterId) async {
     try {
       final db = await _localDb.database;
-      final rows = await db.rawQuery(
-        '''
-        SELECT l.inventory_id, l.listing_id, l.inventory_name,
-               l.barcode, l.price,
-               SUM(MAX(
-                 cs.quantity * cs.units_per_quantity - cs.units_sold,
-                 0
-               ))
-                 AS available_units
-        FROM local_active_listings AS l
-        JOIN local_v_counter_stock AS cs
-          ON cs.inventory_id = l.inventory_id
-         AND cs.counter_id = ?
-        WHERE l.active = 1
-        GROUP BY l.inventory_id, l.listing_id, l.inventory_name,
-                 l.barcode, l.price
-        ORDER BY l.inventory_name COLLATE NOCASE
-        ''',
-        [counterId],
-      );
+      final rows = await _queryProducts(db, counterId);
       return rows.map(RegisterProductModel.fromMap).toList(growable: false);
     } catch (error, stackTrace) {
       _logger.e(
@@ -46,6 +27,53 @@ class LocalCatalogRepository {
       );
       rethrow;
     }
+  }
+
+  Future<RegisterProductModel?> getProductByBarcode(
+    String counterId,
+    String barcode,
+  ) async {
+    try {
+      final db = await _localDb.database;
+      final rows = await _queryProducts(db, counterId, barcode: barcode.trim());
+      if (rows.length != 1) return null;
+      final product = RegisterProductModel.fromMap(rows.single);
+      return product.availableUnits >= 1 ? product : null;
+    } catch (error, stackTrace) {
+      _logger.e(
+        'Unable to look up scanned barcode in local counter stock',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+  }
+
+  Future<List<Map<String, Object?>>> _queryProducts(
+    DatabaseExecutor db,
+    String counterId, {
+    String? barcode,
+  }) {
+    final barcodeFilter = barcode == null
+        ? ''
+        : 'AND cs.barcode = ? COLLATE NOCASE';
+    return db.rawQuery('''
+      SELECT cs.inventory_id, cs.listing_id, cs.inventory_name,
+             cs.barcode, cs.price,
+             SUM(
+               CASE WHEN cs.out_of_stock = 0 THEN
+                 MAX(cs.quantity * cs.units_per_quantity - cs.units_sold, 0)
+               ELSE 0 END
+             ) AS available_units
+      FROM local_v_counter_stock AS cs
+      WHERE cs.counter_id = ?
+        AND cs.listing_id IS NOT NULL
+        AND cs.price IS NOT NULL
+        $barcodeFilter
+      GROUP BY cs.inventory_id, cs.listing_id, cs.inventory_name,
+               cs.barcode, cs.price
+      ORDER BY cs.inventory_name COLLATE NOCASE
+      ''', barcode == null ? [counterId] : [counterId, barcode]);
   }
 
   Future<List<CounterStationModel>> getStations() async {
@@ -134,7 +162,7 @@ class LocalCatalogRepository {
       final rows = await db.rawQuery(
         '''
         SELECT EXISTS(
-          SELECT 1 FROM local_counter_stock WHERE counter_id = ?
+          SELECT 1 FROM local_counter_stock_cache WHERE counter_id = ?
         ) AS ready
         ''',
         [counterId],
@@ -156,7 +184,7 @@ class LocalCatalogRepository {
     try {
       final db = await _localDb.database;
       final result = await db.rawQuery(
-        'SELECT EXISTS(SELECT 1 FROM local_active_listings) AS ready',
+        'SELECT EXISTS(SELECT 1 FROM local_counter_stock_cache) AS ready',
       );
       return Sqflite.firstIntValue(result) == 1;
     } catch (error, stackTrace) {

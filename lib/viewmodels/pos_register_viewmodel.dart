@@ -30,6 +30,7 @@ class PosRegisterViewModel extends ChangeNotifier {
             (product.barcode?.toLowerCase().contains(_query) ?? false),
       )
       .toList(growable: false);
+  bool get hasSearchQuery => _query.isNotEmpty;
   List<CartItemModel> get cart => _cart.values.toList(growable: false);
   int get itemCount => _cart.values.fold(0, (sum, item) => sum + item.units);
   double get subtotal =>
@@ -43,6 +44,15 @@ class PosRegisterViewModel extends ChangeNotifier {
     notifyListeners();
     try {
       _products = await _repository.getProducts(counterId);
+      final productsByInventory = {
+        for (final product in _products) product.inventoryId: product,
+      };
+      for (final entry in _cart.entries.toList()) {
+        final product = productsByInventory[entry.key];
+        _cart[entry.key] = entry.value.copyWith(
+          availableUnits: product?.availableUnits ?? 0,
+        );
+      }
     } catch (error, stackTrace) {
       _logger.e(
         'Register could not load catalog',
@@ -61,15 +71,33 @@ class PosRegisterViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  RegisterProductModel? findByBarcode(String barcode) {
-    for (final product in _products) {
-      if (product.barcode == barcode) return product;
+  Future<RegisterProductModel?> lookupBarcode(
+    String counterId,
+    String barcode,
+  ) async {
+    errorMessage = null;
+    try {
+      return await _repository.getProductByBarcode(counterId, barcode);
+    } catch (error, stackTrace) {
+      _logger.e(
+        'Barcode lookup failed for the assigned counter',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      errorMessage = 'Could not look up this barcode in saved counter stock.';
+      notifyListeners();
+      return null;
     }
-    return null;
+  }
+
+  bool canAddProduct(RegisterProductModel product) {
+    final currentUnits = _cart[product.inventoryId]?.units ?? 0;
+    return product.availableUnits >= 1 &&
+        currentUnits < product.availableUnits.floor();
   }
 
   bool addProduct(RegisterProductModel product) {
-    if (product.availableUnits < 1) return false;
+    if (!canAddProduct(product)) return false;
     final current = _cart[product.inventoryId];
     final nextUnits = (current?.units ?? 0) + 1;
     if (nextUnits > product.availableUnits.floor()) return false;
@@ -95,6 +123,20 @@ class PosRegisterViewModel extends ChangeNotifier {
       return false;
     } else {
       _cart[inventoryId] = item.copyWith(units: nextUnits);
+    }
+    notifyListeners();
+    return true;
+  }
+
+  bool setQuantity(String inventoryId, int quantity) {
+    final item = _cart[inventoryId];
+    if (item == null || quantity < 0) return false;
+    if (quantity == 0) {
+      _cart.remove(inventoryId);
+    } else if (quantity > item.availableUnits.floor()) {
+      return false;
+    } else {
+      _cart[inventoryId] = item.copyWith(units: quantity);
     }
     notifyListeners();
     return true;

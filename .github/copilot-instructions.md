@@ -24,9 +24,9 @@
 
 - Use app-private SQLite (`pos_local.db`) for catalog cache, counter stations, bartenders, local orders, and order items. SQLite requires no Android manifest permission.
 - Perform order totals, tender calculations, order persistence, and local stock decrements locally and transactionally. Keep stable local UUIDs, sale-time unit prices/subtotals, total amount, item count, and `PENDING`/`SYNCED`/`FAILED` state in local records.
-- Use `v_active_listings` for the active listing catalog when needed. Use `v_counter_stock` as the source for assigned counter stock and its associated listing fields; always filter by the signed-in bartender's `counter_id`. Do not rely on superseded stock views for counter assignments.
-- Convert assigned quantity and low-stock threshold into stock units using `units_per_quantity`.
-- Do not let a refresh restore stock already consumed by local orders. Reconcile remote assignment data with local sales explicitly and update only the refreshed counter's stock cache.
+- Use `v_counter_stock` as the source for assigned counter stock and associated listing fields; always filter by the signed-in bartender's `counter_id`. Keep one downloaded `local_counter_stock_cache` and a `local_v_counter_stock` view that adds locally completed POS order units to remote `units_sold` and recalculates `out_of_stock`. Do not keep a separate local listings table.
+- Treat downloaded stock rows as read-only source data: refresh them from Supabase, do not invent or locally modify stock assignments or persist derived local sales into the source cache. Local POS orders are the only locally authored business data.
+- Use the local counter-stock view for product availability and barcode lookup. Barcode scans and product selection must not add out-of-stock items; cart quantity changes must not exceed locally available units.
 - Do not create or modify remote tables, views, functions, policies, grants, or migrations. The current migrations do not authorize order writes and do not define an order-submission RPC. Keep order submission local-only and clearly indicate that server upload is unavailable until an authorized server-side write path is provided; do not attempt direct inserts/upserts into `orders` or `order_items`.
 - The remote schema does not persist sale-time prices or order totals, and `v_order_summaries` derives totals from current listing prices. Treat local SQLite as the financial source of truth for receipts, order history, and shift summaries.
 - The current anon-read migration grants reads across public tables, including `bartenders.pin_hash`, profiles, and order history. This is a project-accepted but security-sensitive exposure, not a safe default to expand. Do not add broader access, expose hashes in UI, or log PINs/hashes. Keep offline PIN verification local and handle hash verification without logging input or stored hash values.
@@ -37,8 +37,8 @@
 - Do not request SQL, broad storage, or Bluetooth permissions. Bluetooth thermal printing is deferred; do not implement printer support unless the user changes scope.
 - Lock Flutter orientation to portrait and preserve keyboard resizing behavior.
 - Use the native Android software keyboard; do not create a custom numeric keypad or calculator.
-- Configure every text field with an appropriate `keyboardType`, `inputFormatters`, `textInputAction`, and `autofocus` value. Use digit-only obscured numeric input for PINs; decimal numeric input with two-decimal filtering for amounts/prices/quantities; search-action text input for search/barcodes; phone input with digit filtering for phone numbers; and multiline/text input for notes.
-- The register uses a compact two-column product grid, top search/scanner control, and persistent bottom cart bar. Checkout uses thumb-friendly controls and quick tender presets.
+- Configure every text field with an appropriate `keyboardType`, `inputFormatters`, `textInputAction`, and `autofocus` value. Use digit-only obscured numeric input for PINs, digit-only integer input for unit counts, decimal numeric input with two-decimal filtering for amounts/prices, search-action text input for product/barcode search, phone input with digit filtering for phone numbers, and multiline/text input for notes.
+- The register uses a compact two-column product grid, selectable filtered name search results, direct barcode lookup, and a persistent bottom cart bar. Checkout uses thumb-friendly controls and quick tender presets.
 
 ## Exceptions and Logging
 

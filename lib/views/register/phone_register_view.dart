@@ -42,9 +42,12 @@ class _PhoneRegisterViewState extends State<PhoneRegisterView> {
     final barcode = await showBarcodeScannerModal(context);
     if (!mounted || barcode == null) return;
     final viewModel = context.read<PosRegisterViewModel>();
-    final product = viewModel.findByBarcode(barcode);
+    final product = await viewModel.lookupBarcode(widget.counterId, barcode);
+    if (!mounted) return;
     if (product == null) {
-      _showMessage('No product matches this barcode.');
+      _showMessage(
+        viewModel.errorMessage ?? 'No available product matches this barcode.',
+      );
     } else if (!viewModel.addProduct(product)) {
       _showMessage('There is not enough local stock for this item.');
     } else {
@@ -168,11 +171,50 @@ class _PhoneRegisterViewState extends State<PhoneRegisterView> {
                       child: Padding(
                         padding: const EdgeInsets.all(24),
                         child: Text(
-                          'No sellable products are available at this counter.',
+                          viewModel.hasSearchQuery
+                              ? 'No matching products.'
+                              : 'No sellable products are available at this counter.',
                           textAlign: TextAlign.center,
                           style: theme.textTheme.bodyLarge,
                         ),
                       ),
+                    )
+                  : viewModel.hasSearchQuery
+                  ? ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      itemCount: viewModel.products.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 4),
+                      itemBuilder: (context, index) {
+                        final product = viewModel.products[index];
+                        final canAdd = viewModel.canAddProduct(product);
+                        final hasStock = product.availableUnits >= 1;
+                        return Card(
+                          child: ListTile(
+                            title: Text(product.inventoryName),
+                            subtitle: Text(
+                              '${product.price.toStringAsFixed(2)}'
+                              '${product.barcode == null ? '' : ' • ${product.barcode}'}',
+                            ),
+                            trailing: Text(
+                              hasStock
+                                  ? canAdd
+                                        ? '${product.availableUnits.floor()} left'
+                                        : 'Limit reached'
+                                  : 'Out of stock',
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: canAdd
+                                    ? theme.colorScheme.secondary
+                                    : theme.colorScheme.error,
+                              ),
+                            ),
+                            enabled: canAdd,
+                            onTap: () {
+                              viewModel.addProduct(product);
+                              FocusScope.of(context).unfocus();
+                            },
+                          ),
+                        );
+                      },
                     )
                   : GridView.builder(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
