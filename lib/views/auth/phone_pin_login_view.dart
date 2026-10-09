@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/widgets/pos_button.dart';
 import '../../core/widgets/pos_text_field.dart';
+import '../../viewmodels/pos_app_viewmodel.dart';
 import '../../viewmodels/pos_auth_viewmodel.dart';
 
 class PhonePinLoginView extends StatefulWidget {
@@ -14,8 +15,9 @@ class PhonePinLoginView extends StatefulWidget {
 }
 
 class _PhonePinLoginViewState extends State<PhonePinLoginView> {
+  final _phoneController = TextEditingController();
   final _pinController = TextEditingController();
-  String? _bartenderId;
+  final _pinFocusNode = FocusNode();
   bool _didLoadProfiles = false;
 
   @override
@@ -29,15 +31,16 @@ class _PhonePinLoginViewState extends State<PhonePinLoginView> {
 
   @override
   void dispose() {
+    _phoneController.dispose();
     _pinController.dispose();
+    _pinFocusNode.dispose();
     super.dispose();
   }
 
   Future<void> _signIn(PosAuthViewModel viewModel) async {
-    final id = _bartenderId;
-    if (id == null || _pinController.text.isEmpty) return;
+    if (_phoneController.text.isEmpty || _pinController.text.isEmpty) return;
     final success = await viewModel.authenticate(
-      bartenderId: id,
+      phone: _phoneController.text,
       pin: _pinController.text,
     );
     _pinController.clear();
@@ -47,6 +50,7 @@ class _PhonePinLoginViewState extends State<PhonePinLoginView> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final appViewModel = context.watch<PosAppViewModel>();
     return Consumer<PosAuthViewModel>(
       builder: (context, viewModel, _) => Scaffold(
         body: SafeArea(
@@ -70,27 +74,33 @@ class _PhonePinLoginViewState extends State<PhonePinLoginView> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Choose your profile and enter your PIN.',
+                      'Enter your phone number and PIN.',
                       style: theme.textTheme.bodyLarge,
                     ),
+                    if (appViewModel.refreshMessage != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        appViewModel.refreshMessage!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.secondary,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 28),
                     if (viewModel.isLoadingProfiles)
                       const Center(child: CircularProgressIndicator())
                     else ...[
-                      DropdownButtonFormField<String>(
-                        initialValue: _bartenderId,
-                        decoration: const InputDecoration(
-                          labelText: 'Bartender',
-                        ),
-                        items: [
-                          for (final bartender in viewModel.bartenders)
-                            DropdownMenuItem(
-                              value: bartender.id,
-                              child: Text(bartender.name),
-                            ),
+                      PosTextField(
+                        controller: _phoneController,
+                        label: 'Phone number',
+                        keyboardType: TextInputType.phone,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
                         ],
-                        onChanged: (value) =>
-                            setState(() => _bartenderId = value),
+                        textInputAction: TextInputAction.next,
+                        autofocus: true,
+                        onChanged: (_) => setState(() {}),
+                        onSubmitted: (_) => _pinFocusNode.requestFocus(),
                       ),
                       const SizedBox(height: 16),
                       PosTextField(
@@ -101,9 +111,26 @@ class _PhonePinLoginViewState extends State<PhonePinLoginView> {
                           FilteringTextInputFormatter.digitsOnly,
                         ],
                         textInputAction: TextInputAction.done,
-                        autofocus: true,
+                        autofocus: false,
                         obscureText: true,
                         onSubmitted: (_) => _signIn(viewModel),
+                        focusNode: _pinFocusNode,
+                        onChanged: (_) => setState(() {}),
+                      ),
+                    ],
+                    if (viewModel.bartenders.isEmpty &&
+                        !viewModel.isLoadingProfiles) ...[
+                      const SizedBox(height: 12),
+                      TextButton.icon(
+                        onPressed: () async {
+                          final app = context.read<PosAppViewModel>();
+                          await app.refreshBartenderProfiles();
+                          if (app.canProceedToLogin) {
+                            await viewModel.loadProfiles();
+                          }
+                        },
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text('Retry profile sync'),
                       ),
                     ],
                     if (viewModel.errorMessage != null) ...[
@@ -119,7 +146,9 @@ class _PhonePinLoginViewState extends State<PhonePinLoginView> {
                     PosButton(
                       label: 'Continue',
                       icon: Icons.lock_open_rounded,
-                      enabled: _bartenderId != null,
+                      enabled:
+                          _phoneController.text.isNotEmpty &&
+                          _pinController.text.isNotEmpty,
                       isLoading: viewModel.isAuthenticating,
                       onPressed: () => _signIn(viewModel),
                     ),

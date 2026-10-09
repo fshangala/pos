@@ -13,6 +13,7 @@ class PosTextField extends StatelessWidget {
     this.obscureText = false,
     this.onChanged,
     this.onSubmitted,
+    this.focusNode,
     this.prefixIcon,
     this.suffixIcon,
     this.maxLines = 1,
@@ -28,6 +29,7 @@ class PosTextField extends StatelessWidget {
   final bool obscureText;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
+  final FocusNode? focusNode;
   final Widget? prefixIcon;
   final Widget? suffixIcon;
   final int? maxLines;
@@ -42,6 +44,7 @@ class PosTextField extends StatelessWidget {
       textInputAction: textInputAction,
       autofocus: autofocus,
       obscureText: obscureText,
+      focusNode: focusNode,
       maxLines: obscureText ? 1 : maxLines,
       onChanged: onChanged,
       onSubmitted: onSubmitted,

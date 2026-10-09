@@ -1,29 +1,32 @@
 # POS Project Instructions
 
-Use [the bartender POS master prompt](../github_copilot_master_prompt_bartender_android_pos_app.md) as the detailed product and architecture specification. These repository-specific instructions record confirmed decisions and constraints that override conflicting parts of that prompt.
-
 ## Product and Architecture
 
 - Build a native Flutter POS for Android smartphones in strict portrait orientation, optimized for one-handed use on 5.5- to 6.7-inch screens.
 - Use Provider with MVVM. Views depend on `ChangeNotifier` ViewModels; ViewModels depend on repositories; repositories access SQLite or remote services. Keep each model and each ViewModel in its own file.
-- Keep local checkout authoritative and usable offline after initial catalog setup. Persist a completed order locally before attempting any network action.
-- Keep shared UI in `lib/core/widgets/`, app styling in `lib/core/theme/pos_theme.dart`, and all widgets styled through `Theme.of(context)` and its color scheme/text theme.
-- Follow the master prompt's project structure and staged implementation sequence. Prefer focused changes and existing project conventions.
+- Keep local checkout authoritative and usable offline. Persist a completed order locally before any network action.
+- Keep shared UI in `lib/core/widgets/`, app styling in `lib/core/theme/pos_theme.dart`, and style widgets through `Theme.of(context)` and its color scheme/text theme.
+- Prefer focused changes and existing project conventions.
 
-## Environment and Startup
+## Startup, Profiles, and Login
 
 - Load Supabase settings from the root `.env` using `flutter_dotenv`; list the asset in `pubspec.yaml`. Maintain `.env.example` with placeholders, never real credentials.
 - Validate configuration and handle missing/unreadable settings with a visible setup/error state instead of force-unwrapping missing values or crashing.
 - Initialize Flutter bindings, environment configuration, Supabase when configured, portrait orientation, local SQLite, and providers in a deliberate startup sequence.
-- Require a successful initial online catalog sync before first POS use. After initial setup, use cached data for offline launches.
+- On app startup, fetch active bartender profiles and insert/update them in the local `local_bartenders` table. Do not erase a usable local profile cache when the online fetch fails.
+- If profile sync fails, offer retry and continuing with existing local data. Allow local continuation only when cached profiles are available; otherwise keep recovery explicit.
+- Sign bartenders in using phone number and PIN, verified locally against the cached bcrypt hash. After login, use the bartender's assigned `counter_id`; do not ask them to choose a different counter.
+- After sign-in, fetch that assigned counter's catalog and stock. If the fetch fails, proceed using the assigned counter's local cache when available and clearly communicate cached/offline mode. If no assigned-counter cache exists, show an explicit recoverable error.
+- Keep an in-POS action for refreshing data scoped to the signed-in bartender's assigned counter.
 - Treat the Supabase anon key as a public client key, not a secret. Never log it or other credentials.
 
 ## Local Data and Supabase
 
-- Use app-private SQLite (`pos_local.db`) for catalog cache, stations, bartenders, local orders, and order items. SQLite requires no Android manifest permission.
+- Use app-private SQLite (`pos_local.db`) for catalog cache, counter stations, bartenders, local orders, and order items. SQLite requires no Android manifest permission.
 - Perform order totals, tender calculations, order persistence, and local stock decrements locally and transactionally. Keep stable local UUIDs, sale-time unit prices/subtotals, total amount, item count, and `PENDING`/`SYNCED`/`FAILED` state in local records.
-- Use the existing catalog views `v_active_listings` and `v_counter_stock_allocations`, plus `bartenders` and `counter_stations`, for initial catalog sync. Do not assume undeclared views or functions.
-- Do not let a catalog refresh restore stock already consumed by local orders since the last sync. Reconcile remote allocation data with local sales explicitly.
+- Use `v_active_listings` for the active listing catalog when needed. Use `v_counter_stock` as the source for assigned counter stock and its associated listing fields; always filter by the signed-in bartender's `counter_id`. Do not rely on superseded stock views for counter assignments.
+- Convert assigned quantity and low-stock threshold into stock units using `units_per_quantity`.
+- Do not let a refresh restore stock already consumed by local orders. Reconcile remote assignment data with local sales explicitly and update only the refreshed counter's stock cache.
 - Do not create or modify remote tables, views, functions, policies, grants, or migrations. The current migrations do not authorize order writes and do not define an order-submission RPC. Keep order submission local-only and clearly indicate that server upload is unavailable until an authorized server-side write path is provided; do not attempt direct inserts/upserts into `orders` or `order_items`.
 - The remote schema does not persist sale-time prices or order totals, and `v_order_summaries` derives totals from current listing prices. Treat local SQLite as the financial source of truth for receipts, order history, and shift summaries.
 - The current anon-read migration grants reads across public tables, including `bartenders.pin_hash`, profiles, and order history. This is a project-accepted but security-sensitive exposure, not a safe default to expand. Do not add broader access, expose hashes in UI, or log PINs/hashes. Keep offline PIN verification local and handle hash verification without logging input or stored hash values.

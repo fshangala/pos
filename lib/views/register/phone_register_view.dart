@@ -5,7 +5,7 @@ import '../../core/widgets/phone_product_tile.dart';
 import '../../core/widgets/pos_search_bar.dart';
 import '../../core/widgets/pos_sign_out_button.dart';
 import '../../core/widgets/sticky_bottom_cart_bar.dart';
-import '../../viewmodels/pos_app_viewmodel.dart';
+import '../../viewmodels/pos_auth_viewmodel.dart';
 import '../../viewmodels/pos_register_viewmodel.dart';
 import '../checkout/phone_checkout_view.dart';
 import 'widgets/barcode_scanner_modal.dart';
@@ -82,13 +82,13 @@ class _PhoneRegisterViewState extends State<PhoneRegisterView> {
     _showMessage('Held order resumed. Check stock before checkout.');
   }
 
-  Future<void> _refreshCatalog() async {
-    final appViewModel = context.read<PosAppViewModel>();
-    await appViewModel.refreshCatalog();
+  Future<void> _refreshCounterData() async {
+    final authViewModel = context.read<PosAuthViewModel>();
+    await authViewModel.refreshAssignedCounterData();
     if (!mounted) return;
     await context.read<PosRegisterViewModel>().loadProducts(widget.counterId);
     if (!mounted) return;
-    final message = appViewModel.refreshMessage;
+    final message = authViewModel.counterDataMessage;
     if (message != null) _showMessage(message);
   }
 
@@ -101,6 +101,7 @@ class _PhoneRegisterViewState extends State<PhoneRegisterView> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final authViewModel = context.watch<PosAuthViewModel>();
     return Consumer<PosRegisterViewModel>(
       builder: (context, viewModel, _) => Scaffold(
         appBar: AppBar(
@@ -112,9 +113,17 @@ class _PhoneRegisterViewState extends State<PhoneRegisterView> {
               icon: const Icon(Icons.pause_circle_outline_rounded),
             ),
             IconButton(
-              tooltip: 'Refresh catalog from server',
-              onPressed: _refreshCatalog,
-              icon: const Icon(Icons.refresh_rounded),
+              tooltip: 'Refresh this counter',
+              onPressed: authViewModel.isRefreshingCounterData
+                  ? null
+                  : _refreshCounterData,
+              icon: authViewModel.isRefreshingCounterData
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh_rounded),
             ),
             const PosSignOutButton(),
           ],
@@ -128,6 +137,19 @@ class _PhoneRegisterViewState extends State<PhoneRegisterView> {
                 onScan: _scanBarcode,
               ),
             ),
+            if (authViewModel.counterDataMessage != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    authViewModel.counterDataMessage!,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.secondary,
+                    ),
+                  ),
+                ),
+              ),
             if (viewModel.errorMessage != null)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),

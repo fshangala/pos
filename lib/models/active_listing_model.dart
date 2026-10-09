@@ -29,6 +29,18 @@ class ActiveListingModel {
     );
   }
 
+  factory ActiveListingModel.fromCounterStockView(Map<String, dynamic> map) {
+    return ActiveListingModel(
+      listingId: map['listing_id'] as String,
+      inventoryId: map['inventory_id'] as String,
+      inventoryName: map['inventory_name'] as String,
+      barcode: map['barcode'] as String?,
+      price: (map['price'] as num).toDouble(),
+      active: true,
+      syncedAt: DateTime.now().toUtc().toIso8601String(),
+    );
+  }
+
   factory ActiveListingModel.fromLocal(Map<String, Object?> map) {
     return ActiveListingModel(
       listingId: map['listing_id'] as String,

@@ -21,7 +21,6 @@ import 'viewmodels/pos_register_viewmodel.dart';
 import 'viewmodels/pos_shift_viewmodel.dart';
 import 'viewmodels/pos_sync_viewmodel.dart';
 import 'views/auth/phone_pin_login_view.dart';
-import 'views/counter_selection/phone_station_select_view.dart';
 import 'views/pos_main_shell.dart';
 import 'views/setup/pos_setup_view.dart';
 
@@ -119,7 +118,6 @@ class PosApplication extends StatelessWidget {
         Provider<SyncRepository?>.value(value: syncRepository),
         ChangeNotifierProvider<PosAppViewModel>(
           create: (context) => PosAppViewModel(
-            localDb: context.read<LocalDbService>(),
             catalogRepository: context.read<LocalCatalogRepository>(),
             syncRepository: context.read<SyncRepository?>(),
             configurationError: configurationError,
@@ -130,6 +128,7 @@ class PosApplication extends StatelessWidget {
           create: (context) => PosAuthViewModel(
             repository: context.read<LocalAuthRepository>(),
             catalogRepository: context.read<LocalCatalogRepository>(),
+            syncRepository: context.read<SyncRepository?>(),
             logger: logger,
           ),
         ),
@@ -201,9 +200,8 @@ class _PosRootViewState extends State<PosRootView> {
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        if (!app.isCatalogReady) return const PosSetupView();
+        if (!app.canProceedToLogin) return const PosSetupView();
         if (auth.bartender == null) return const PhonePinLoginView();
-        if (auth.station == null) return const PhoneStationSelectView();
         return const PosMainShell();
       },
     );

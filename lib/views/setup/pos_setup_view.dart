@@ -28,40 +28,34 @@ class PosSetupView extends StatelessWidget {
                     ),
                     const SizedBox(height: 24),
                     Text(
-                      'Set up this register',
+                      'Bartender profiles',
                       style: theme.textTheme.headlineSmall,
                     ),
                     const SizedBox(height: 10),
                     Text(
                       viewModel.setupError ??
-                          'Connect to the catalog service to set up this device.',
+                          'Connect to load the bartender profiles for this register.',
                       style: theme.textTheme.bodyLarge,
                     ),
-                    if (viewModel.configurationError != null) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        viewModel.configurationError!,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.error,
-                        ),
-                      ),
-                    ],
                     if (viewModel.refreshMessage != null) ...[
                       const SizedBox(height: 16),
                       Text(viewModel.refreshMessage!),
                     ],
                     const SizedBox(height: 28),
                     PosButton(
-                      label: 'Sync catalog',
+                      label: 'Retry profile sync',
                       icon: Icons.sync_rounded,
-                      isLoading: viewModel.isSyncingCatalog,
-                      onPressed: viewModel.refreshCatalog,
+                      isLoading: viewModel.isSyncingProfiles,
+                      onPressed: viewModel.refreshBartenderProfiles,
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      'The first catalog sync must finish before this register can be used.',
-                      style: theme.textTheme.bodySmall,
-                    ),
+                    if (viewModel.canContinueWithLocalBartenders) ...[
+                      const SizedBox(height: 12),
+                      PosButton(
+                        label: 'Continue with local data',
+                        icon: Icons.offline_bolt_outlined,
+                        onPressed: viewModel.continueWithLocalBartenders,
+                      ),
+                    ],
                   ],
                 ),
               ),

@@ -13,19 +13,26 @@ class LocalAuthRepository {
   final Logger _logger;
 
   Future<BartenderModel?> authenticate({
-    required String bartenderId,
+    required String phone,
     required String pin,
   }) async {
     try {
       final db = await _localDb.database;
       final rows = await db.query(
         'local_bartenders',
-        where: 'id = ? AND is_active = ?',
-        whereArgs: [bartenderId, 1],
-        limit: 1,
+        where: 'is_active = ?',
+        whereArgs: [1],
       );
-      if (rows.isEmpty) return null;
-      final bartender = BartenderModel.fromMap(rows.single);
+      final enteredPhone = _digitsOnly(phone);
+      Map<String, Object?>? match;
+      for (final row in rows) {
+        if (_digitsOnly(row['phone'] as String) == enteredPhone) {
+          match = row;
+          break;
+        }
+      }
+      if (match == null) return null;
+      final bartender = BartenderModel.fromMap(match);
       if (!BCrypt.checkpw(pin, bartender.pinHash)) return null;
       return bartender;
     } catch (error, stackTrace) {
@@ -37,4 +44,6 @@ class LocalAuthRepository {
       rethrow;
     }
   }
+
+  String _digitsOnly(String value) => value.replaceAll(RegExp(r'\D'), '');
 }

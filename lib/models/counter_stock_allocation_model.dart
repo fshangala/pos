@@ -31,23 +31,32 @@ class CounterStockAllocationModel {
   final bool isLowStock;
   final String syncedAt;
 
-  double get availableUnits =>
-      (remoteRemainingUnits - localUnitsSold).clamp(0, double.infinity);
+  double get availableUnits => (remoteRemainingUnits - localUnitsSold)
+      .clamp(0, double.infinity)
+      .toDouble();
 
-  factory CounterStockAllocationModel.fromRemote(Map<String, dynamic> map) {
+  factory CounterStockAllocationModel.fromCounterStockView(
+    Map<String, dynamic> map, {
+    required String counterName,
+  }) {
+    final unitsPerQuantity = (map['units_per_quantity'] as num).toDouble();
+    final assignedUnits =
+        (map['quantity'] as num).toDouble() * unitsPerQuantity;
+    final lowStockThreshold =
+        (map['low_stock_threshold'] as num).toDouble() * unitsPerQuantity;
     return CounterStockAllocationModel(
-      counterStockId: map['counter_stock_id'] as String,
+      counterStockId: map['id'] as String,
       counterId: map['counter_id'] as String,
-      counterName: map['counter_name'] as String,
+      counterName: counterName,
       stockItemId: map['stock_item_id'] as String,
       inventoryId: map['inventory_id'] as String,
       inventoryName: map['inventory_name'] as String,
       barcode: map['barcode'] as String?,
-      remoteRemainingUnits: (map['remaining_units'] as num).toDouble(),
-      unitsPerQuantity: (map['units_per_quantity'] as num).toDouble(),
-      totalAssignedUnits: (map['total_assigned_units'] as num).toDouble(),
-      lowStockThreshold: (map['low_stock_threshold_units'] as num).toDouble(),
-      isLowStock: map['is_low_stock'] as bool,
+      remoteRemainingUnits: assignedUnits,
+      unitsPerQuantity: unitsPerQuantity,
+      totalAssignedUnits: assignedUnits,
+      lowStockThreshold: lowStockThreshold,
+      isLowStock: assignedUnits <= lowStockThreshold,
       syncedAt: DateTime.now().toUtc().toIso8601String(),
     );
   }

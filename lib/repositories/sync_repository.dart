@@ -5,5 +5,8 @@ class SyncRepository {
 
   final OnlineSyncService _service;
 
-  Future<void> pullCatalog() => _service.pullOnlineCatalogData();
+  Future<void> pullBartenders() => _service.pullBartenders();
+
+  Future<void> pullCounterData(String counterId) =>
+      _service.pullCounterData(counterId);
 }

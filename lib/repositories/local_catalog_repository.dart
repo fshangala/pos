@@ -83,6 +83,72 @@ class LocalCatalogRepository {
     }
   }
 
+  Future<CounterStationModel?> getStation(String counterId) async {
+    try {
+      final db = await _localDb.database;
+      final rows = await db.query(
+        'local_counter_stations',
+        where: 'id = ? AND is_active = ?',
+        whereArgs: [counterId, 1],
+        limit: 1,
+      );
+      return rows.isEmpty ? null : CounterStationModel.fromMap(rows.single);
+    } catch (error, stackTrace) {
+      _logger.e(
+        'Unable to load the bartender assigned counter',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+  }
+
+  Future<bool> hasActiveBartenders() async {
+    try {
+      final db = await _localDb.database;
+      final rows = await db.rawQuery(
+        'SELECT EXISTS(SELECT 1 FROM local_bartenders WHERE is_active = 1) AS ready',
+      );
+      return Sqflite.firstIntValue(rows) == 1;
+    } catch (error, stackTrace) {
+      _logger.e(
+        'Unable to check for cached bartender profiles',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+  }
+
+  Future<bool> hasCounterCatalog(String counterId) async {
+    try {
+      final synced = await _localDb.getMetadata(
+        'counter_catalog_synced:$counterId',
+      );
+      if (synced == 'true') return true;
+
+      final db = await _localDb.database;
+      final rows = await db.rawQuery(
+        '''
+        SELECT EXISTS(
+          SELECT 1 FROM local_counter_stock WHERE counter_id = ?
+        ) AS ready
+        ''',
+        [counterId],
+      );
+      if (Sqflite.firstIntValue(rows) == 1) return true;
+      return await _localDb.hasCompletedInitialSync &&
+          await getStation(counterId) != null;
+    } catch (error, stackTrace) {
+      _logger.e(
+        'Unable to check for cached assigned-counter catalog',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+  }
+
   Future<bool> hasCatalog() async {
     try {
       final db = await _localDb.database;
