@@ -21,10 +21,13 @@ class LocalCatalogRepository {
         '''
         SELECT l.inventory_id, l.listing_id, l.inventory_name,
                l.barcode, l.price,
-               SUM(MAX(cs.remote_remaining_units - cs.local_units_sold, 0))
+               SUM(MAX(
+                 cs.quantity * cs.units_per_quantity - cs.units_sold,
+                 0
+               ))
                  AS available_units
         FROM local_active_listings AS l
-        JOIN local_counter_stock AS cs
+        JOIN local_v_counter_stock AS cs
           ON cs.inventory_id = l.inventory_id
          AND cs.counter_id = ?
         WHERE l.active = 1

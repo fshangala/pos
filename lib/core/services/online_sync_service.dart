@@ -86,17 +86,6 @@ class OnlineSyncService {
 
       final db = await _localDb.database;
       await db.transaction((transaction) async {
-        final previousAllocations = await transaction.query(
-          'local_counter_stock',
-          columns: ['stock_item_id', 'local_units_sold'],
-          where: 'counter_id = ?',
-          whereArgs: [counterId],
-        );
-        final soldByStockItem = {
-          for (final row in previousAllocations)
-            row['stock_item_id'] as String: (row['local_units_sold'] as num)
-                .toDouble(),
-        };
         await transaction.delete(
           'local_counter_stock',
           where: 'counter_id = ?',
@@ -114,29 +103,9 @@ class OnlineSyncService {
           );
         }
         for (final allocation in allocations) {
-          final localUnitsSold = soldByStockItem[allocation.stockItemId] ?? 0;
-          final availableUnits =
-              (allocation.remoteRemainingUnits - localUnitsSold)
-                  .clamp(0, double.infinity)
-                  .toDouble();
           await transaction.insert(
             'local_counter_stock',
-            CounterStockAllocationModel(
-              counterStockId: allocation.counterStockId,
-              counterId: allocation.counterId,
-              counterName: allocation.counterName,
-              stockItemId: allocation.stockItemId,
-              inventoryId: allocation.inventoryId,
-              inventoryName: allocation.inventoryName,
-              barcode: allocation.barcode,
-              remoteRemainingUnits: allocation.remoteRemainingUnits,
-              unitsPerQuantity: allocation.unitsPerQuantity,
-              totalAssignedUnits: allocation.totalAssignedUnits,
-              localUnitsSold: localUnitsSold,
-              lowStockThreshold: allocation.lowStockThreshold,
-              isLowStock: availableUnits <= allocation.lowStockThreshold,
-              syncedAt: allocation.syncedAt,
-            ).toMap(),
+            allocation.toMap(),
             conflictAlgorithm: ConflictAlgorithm.replace,
           );
         }

@@ -132,7 +132,6 @@ class LocalOrderRepository {
             orderId: order.localOrderId,
             counterId: counterId,
             item: item,
-            updateStock: false,
           );
         }
       });
@@ -152,13 +151,12 @@ class LocalOrderRepository {
     required String orderId,
     required String counterId,
     required CartItemModel item,
-    bool updateStock = true,
   }) async {
     final batches = await transaction.rawQuery(
       '''
-      SELECT counter_stock_id, stock_item_id,
-             MAX(remote_remaining_units - local_units_sold, 0) AS available
-      FROM local_counter_stock
+      SELECT id AS counter_stock_id, stock_item_id,
+             MAX(quantity * units_per_quantity - units_sold, 0) AS available
+      FROM local_v_counter_stock
       WHERE counter_id = ? AND inventory_id = ?
       ORDER BY available DESC
       ''',
@@ -191,22 +189,6 @@ class LocalOrderRepository {
         subtotal: (unitPrice * unitsToTake * 100).roundToDouble() / 100,
       );
       await transaction.insert('local_order_items', line.toMap());
-      if (updateStock) {
-        final counterStockId = batch['counter_stock_id'] as String;
-        await transaction.rawUpdate(
-          '''
-          UPDATE local_counter_stock
-          SET local_units_sold = local_units_sold + ?,
-              is_low_stock = CASE
-                WHEN remote_remaining_units - local_units_sold - ?
-                     <= low_stock_threshold THEN 1
-                ELSE 0
-              END
-          WHERE counter_stock_id = ?
-          ''',
-          [unitsToTake, unitsToTake, counterStockId],
-        );
-      }
       remainingUnits -= unitsToTake;
     }
     if (remainingUnits > 0) {
@@ -258,9 +240,12 @@ class LocalOrderRepository {
         final stockRows = await transaction.rawQuery(
           '''
           SELECT inventory_id,
-                 SUM(MAX(remote_remaining_units - local_units_sold, 0))
+                 SUM(MAX(
+                   quantity * units_per_quantity - units_sold,
+                   0
+                 ))
                    AS available_units
-          FROM local_counter_stock
+          FROM local_v_counter_stock
           WHERE counter_id = ?
           GROUP BY inventory_id
           ''',
