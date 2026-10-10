@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/bartender_model.dart';
 import '../../models/counter_station_model.dart';
 import '../../models/counter_stock_allocation_model.dart';
+import '../../models/local_order_item_model.dart';
+import '../../models/local_order_model.dart';
 import 'local_db_service.dart';
 
 class OnlineSyncService {
@@ -19,6 +21,104 @@ class OnlineSyncService {
   final SupabaseClient _client;
   final LocalDbService _localDb;
   final Logger _logger;
+
+  Future<void> submitCompletedOrder({
+    required LocalOrderModel order,
+    required List<LocalOrderItemModel> items,
+  }) async {
+    try {
+      if (order.status != 'COMPLETED') {
+        throw ArgumentError('Only completed orders can be submitted.');
+      }
+      if (items.isEmpty) {
+        throw ArgumentError('A completed order must contain items.');
+      }
+
+      final orderId = order.localOrderId;
+      final orderData = {
+        'id': orderId,
+        'counter_id': order.counterId,
+        'bartender_id': order.bartenderId,
+        'payment_type': order.paymentType,
+        'status': order.status,
+        'created_at': order.createdAt,
+      };
+      final existingOrder = await _client
+          .from('orders')
+          .select('id,counter_id,bartender_id,payment_type,status,created_at')
+          .eq('id', orderId)
+          .maybeSingle();
+
+      if (existingOrder == null) {
+        await _client.from('orders').insert(orderData);
+      } else if (!_matchesRemoteOrder(existingOrder, orderData)) {
+        throw StateError('The remote order ID already has different data.');
+      }
+
+      final remoteItems = await _client
+          .from('order_items')
+          .select('id,order_id,stock_item_id,listing_id,units')
+          .eq('order_id', orderId);
+      final remoteItemsById = {
+        for (final row in remoteItems) row['id'] as String: row,
+      };
+      final itemsToInsert = <Map<String, Object?>>[];
+
+      for (final item in items) {
+        final itemData = {
+          'id': item.localItemId,
+          'order_id': orderId,
+          'stock_item_id': item.stockItemId,
+          'listing_id': item.listingId,
+          'units': item.units,
+        };
+        final existingItem = remoteItemsById[item.localItemId];
+        if (existingItem == null) {
+          itemsToInsert.add(itemData);
+        } else if (!_matchesRemoteItem(existingItem, itemData)) {
+          throw StateError(
+            'The remote order item ID already has different data.',
+          );
+        }
+      }
+
+      if (itemsToInsert.isNotEmpty) {
+        await _client.from('order_items').insert(itemsToInsert);
+      }
+    } catch (error, stackTrace) {
+      _logger.e(
+        'Completed order submission failed for local order ${order.localOrderId}',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+  }
+
+  bool _matchesRemoteOrder(
+    Map<String, dynamic> remote,
+    Map<String, Object?> expected,
+  ) {
+    final remoteCreatedAt = DateTime.tryParse(remote['created_at'] as String);
+    final expectedCreatedAt = DateTime.parse(expected['created_at']! as String);
+    return remote['id'] == expected['id'] &&
+        remote['counter_id'] == expected['counter_id'] &&
+        remote['bartender_id'] == expected['bartender_id'] &&
+        remote['payment_type'] == expected['payment_type'] &&
+        remote['status'] == expected['status'] &&
+        remoteCreatedAt?.toUtc() == expectedCreatedAt.toUtc();
+  }
+
+  bool _matchesRemoteItem(
+    Map<String, dynamic> remote,
+    Map<String, Object?> expected,
+  ) {
+    return remote['id'] == expected['id'] &&
+        remote['order_id'] == expected['order_id'] &&
+        remote['stock_item_id'] == expected['stock_item_id'] &&
+        remote['listing_id'] == expected['listing_id'] &&
+        remote['units'] == expected['units'];
+  }
 
   Future<void> pullBartenders() async {
     try {

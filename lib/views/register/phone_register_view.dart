@@ -66,7 +66,7 @@ class _PhoneRegisterViewState extends State<PhoneRegisterView> {
       _showMessage('Order held on this device.');
       return;
     }
-    final order = await Navigator.of(context).push<bool>(
+    final checkoutResult = await Navigator.of(context).push<CheckoutResult>(
       MaterialPageRoute(
         builder: (_) => PhoneCheckoutView(
           counterId: widget.counterId,
@@ -74,9 +74,14 @@ class _PhoneRegisterViewState extends State<PhoneRegisterView> {
         ),
       ),
     );
-    if (!mounted || order != true) return;
+    if (!mounted || checkoutResult == null) return;
     await context.read<PosRegisterViewModel>().loadProducts(widget.counterId);
-    if (mounted) _showMessage('Order saved on this device.');
+    if (!mounted) return;
+    _showMessage(
+      checkoutResult == CheckoutResult.uploaded
+          ? 'Order saved and uploaded.'
+          : 'Order saved on this device. Upload failed; retry from Orders.',
+    );
   }
 
   Future<void> _openHeldOrders() async {

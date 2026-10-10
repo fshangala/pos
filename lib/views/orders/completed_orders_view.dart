@@ -29,12 +29,27 @@ class _CompletedOrdersViewState extends State<CompletedOrdersView> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final syncMessage = context.read<PosSyncViewModel>().message;
-    return Consumer<PosShiftViewModel>(
-      builder: (context, viewModel, _) => Scaffold(
+    return Consumer2<PosShiftViewModel, PosSyncViewModel>(
+      builder: (context, viewModel, syncViewModel, _) => Scaffold(
         appBar: AppBar(
           title: const Text('Today’s orders'),
           actions: [
+            IconButton(
+              tooltip: 'Retry pending uploads',
+              onPressed: syncViewModel.isRetryingOrders
+                  ? null
+                  : () async {
+                      await syncViewModel.retryPendingOrders();
+                      await viewModel.refresh();
+                    },
+              icon: syncViewModel.isRetryingOrders
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.cloud_upload_outlined),
+            ),
             IconButton(
               tooltip: 'Refresh orders',
               onPressed: viewModel.refresh,
@@ -61,7 +76,7 @@ class _CompletedOrdersViewState extends State<CompletedOrdersView> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              syncMessage,
+                              syncViewModel.message,
                               style: theme.textTheme.bodyMedium,
                             ),
                           ),

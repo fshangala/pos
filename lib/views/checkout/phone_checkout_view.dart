@@ -8,6 +8,8 @@ import '../../core/widgets/pos_text_field.dart';
 import '../../core/widgets/quick_tender_chips.dart';
 import '../../viewmodels/pos_checkout_viewmodel.dart';
 
+enum CheckoutResult { uploaded, savedLocally }
+
 class PhoneCheckoutView extends StatefulWidget {
   const PhoneCheckoutView({
     required this.counterId,
@@ -126,7 +128,11 @@ class _PhoneCheckoutViewState extends State<PhoneCheckoutView> {
                   bartenderId: widget.bartenderId,
                 );
                 if (order != null && context.mounted) {
-                  Navigator.of(context).pop(true);
+                  Navigator.of(context).pop(
+                    viewModel.uploadSucceeded == true
+                        ? CheckoutResult.uploaded
+                        : CheckoutResult.savedLocally,
+                  );
                 }
               },
             ),

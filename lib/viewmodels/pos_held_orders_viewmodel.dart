@@ -32,7 +32,6 @@ class PosHeldOrdersViewModel extends ChangeNotifier {
         counterId: counterId,
         bartenderId: bartenderId,
         items: _registerViewModel.cart,
-        discountAmount: _registerViewModel.discountAmount,
         notes: _registerViewModel.notes,
       );
       _registerViewModel.clearCart();
@@ -82,7 +81,6 @@ class PosHeldOrdersViewModel extends ChangeNotifier {
       }
       _registerViewModel.restoreCart(
         items: draft.items,
-        discountAmount: draft.order.discountAmount,
         notes: draft.order.notes,
       );
       orders.removeWhere((order) => order.localOrderId == orderId);

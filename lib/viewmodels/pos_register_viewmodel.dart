@@ -18,7 +18,6 @@ class PosRegisterViewModel extends ChangeNotifier {
 
   List<RegisterProductModel> _products = [];
   String _query = '';
-  double discountAmount = 0;
   String notes = '';
   bool isLoading = false;
   String? errorMessage;
@@ -35,7 +34,7 @@ class PosRegisterViewModel extends ChangeNotifier {
   int get itemCount => _cart.values.fold(0, (sum, item) => sum + item.units);
   double get subtotal =>
       _cart.values.fold(0, (sum, item) => sum + item.subtotal);
-  double get total => (subtotal - discountAmount).clamp(0, double.infinity);
+  double get total => subtotal;
   bool get isCartEmpty => _cart.isEmpty;
 
   Future<void> loadProducts(String counterId) async {
@@ -149,27 +148,18 @@ class PosRegisterViewModel extends ChangeNotifier {
 
   void clearCart() {
     _cart.clear();
-    discountAmount = 0;
     notes = '';
     notifyListeners();
   }
 
   void restoreCart({
     required List<CartItemModel> items,
-    required double discountAmount,
     required String? notes,
   }) {
     _cart
       ..clear()
       ..addEntries(items.map((item) => MapEntry(item.inventoryId, item)));
-    this.discountAmount = discountAmount.clamp(0, subtotal);
     this.notes = notes ?? '';
-    notifyListeners();
-  }
-
-  void setDiscountAmount(String value) {
-    final discount = double.tryParse(value) ?? 0;
-    discountAmount = discount.clamp(0, subtotal);
     notifyListeners();
   }
 

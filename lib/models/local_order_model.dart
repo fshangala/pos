@@ -9,7 +9,6 @@ class LocalOrderModel {
     required this.totalItemsCount,
     required this.syncStatus,
     required this.createdAt,
-    this.discountAmount = 0,
     this.notes,
     this.remoteOrderId,
     this.syncError,
@@ -22,7 +21,6 @@ class LocalOrderModel {
   final String paymentType;
   final String status;
   final double totalAmount;
-  final double discountAmount;
   final String? notes;
   final int totalItemsCount;
   final String syncStatus;
@@ -37,7 +35,6 @@ class LocalOrderModel {
     'payment_type': paymentType,
     'status': status,
     'total_amount': totalAmount,
-    'discount_amount': discountAmount,
     'notes': notes,
     'total_items_count': totalItemsCount,
     'sync_status': syncStatus,
@@ -54,7 +51,6 @@ class LocalOrderModel {
       paymentType: map['payment_type'] as String,
       status: map['status'] as String,
       totalAmount: (map['total_amount'] as num).toDouble(),
-      discountAmount: (map['discount_amount'] as num?)?.toDouble() ?? 0,
       notes: map['notes'] as String?,
       totalItemsCount: map['total_items_count'] as int,
       syncStatus: map['sync_status'] as String,

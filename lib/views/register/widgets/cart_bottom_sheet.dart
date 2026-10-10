@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/widgets/cart_item_row.dart';
@@ -39,7 +38,6 @@ class CartBottomSheet extends StatefulWidget {
 }
 
 class _CartBottomSheetState extends State<CartBottomSheet> {
-  final _discountController = TextEditingController();
   final _notesController = TextEditingController();
   bool _didInitializeFields = false;
 
@@ -49,16 +47,12 @@ class _CartBottomSheetState extends State<CartBottomSheet> {
     if (!_didInitializeFields) {
       _didInitializeFields = true;
       final viewModel = context.read<PosRegisterViewModel>();
-      _discountController.text = viewModel.discountAmount == 0
-          ? ''
-          : viewModel.discountAmount.toStringAsFixed(2);
       _notesController.text = viewModel.notes;
     }
   }
 
   @override
   void dispose() {
-    _discountController.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -119,20 +113,6 @@ class _CartBottomSheetState extends State<CartBottomSheet> {
                 ),
               ),
               PosTextField(
-                controller: _discountController,
-                label: 'Order discount',
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-                ],
-                textInputAction: TextInputAction.done,
-                autofocus: false,
-                onChanged: viewModel.setDiscountAmount,
-              ),
-              const SizedBox(height: 10),
-              PosTextField(
                 controller: _notesController,
                 label: 'Order notes',
                 keyboardType: TextInputType.multiline,
@@ -144,19 +124,6 @@ class _CartBottomSheetState extends State<CartBottomSheet> {
               ),
               const SizedBox(height: 10),
               const Divider(),
-              Row(
-                children: [
-                  const Expanded(child: Text('Subtotal')),
-                  Text(viewModel.subtotal.toStringAsFixed(2)),
-                ],
-              ),
-              if (viewModel.discountAmount > 0)
-                Row(
-                  children: [
-                    const Expanded(child: Text('Discount')),
-                    Text('-${viewModel.discountAmount.toStringAsFixed(2)}'),
-                  ],
-                ),
               Row(
                 children: [
                   Expanded(

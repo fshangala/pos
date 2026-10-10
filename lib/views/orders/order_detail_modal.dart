@@ -94,13 +94,6 @@ class OrderDetailModal extends StatelessWidget {
               Text(order.notes!),
             ],
             const Divider(),
-            if (order.discountAmount > 0)
-              _AmountRow(
-                label: 'Subtotal',
-                value: order.totalAmount + order.discountAmount,
-              ),
-            if (order.discountAmount > 0)
-              _AmountRow(label: 'Discount', value: -order.discountAmount),
             _AmountRow(
               label: 'Total',
               value: order.totalAmount,

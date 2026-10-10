@@ -80,7 +80,6 @@ class LocalDbService {
         payment_type TEXT NOT NULL CHECK (payment_type IN ('CASH', 'MOBILE_MONEY')),
         status TEXT NOT NULL CHECK (status IN ('COMPLETED', 'VOIDED', 'HELD')),
         total_amount REAL NOT NULL,
-        discount_amount REAL NOT NULL DEFAULT 0,
         notes TEXT,
         total_items_count INTEGER NOT NULL,
         sync_status TEXT NOT NULL DEFAULT 'PENDING'
@@ -130,9 +129,6 @@ class LocalDbService {
     int newVersion,
   ) async {
     if (oldVersion < 2) {
-      await db.execute(
-        'ALTER TABLE local_orders ADD COLUMN discount_amount REAL NOT NULL DEFAULT 0',
-      );
       await db.execute('ALTER TABLE local_orders ADD COLUMN notes TEXT');
     }
     if (oldVersion < 3) {

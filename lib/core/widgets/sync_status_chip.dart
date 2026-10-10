@@ -9,7 +9,7 @@ class SyncStatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final (label, color) = switch (status) {
-      'SYNCED' => ('Local', theme.colorScheme.primary),
+      'SYNCED' => ('Uploaded', theme.colorScheme.primary),
       'FAILED' => ('Local only', theme.colorScheme.error),
       _ => ('Pending locally', theme.colorScheme.secondary),
     };

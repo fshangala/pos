@@ -6,7 +6,7 @@ Bar POS is a mobile point-of-sale app for bartenders. It helps staff take orders
 
 - Sign in with your phone number and PIN.
 - Browse products available at your assigned counter, search by name, or scan a barcode.
-- Build an order, adjust item quantities within available stock, add a discount or notes, and place an order on hold.
+- Build an order, adjust item quantities within available stock, add notes, and place an order on hold.
 - Complete checkout with cash or mobile money. For cash, the app calculates the change due.
 - Review completed orders and view a daily shift summary with sales totals.
 - Refresh counter information when an internet connection is available.

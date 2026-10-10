@@ -38,7 +38,6 @@ class LocalOrderRepository {
     required String bartenderId,
     required String paymentType,
     required List<CartItemModel> items,
-    double discountAmount = 0,
     String? notes,
   }) async {
     try {
@@ -49,9 +48,6 @@ class LocalOrderRepository {
         0,
         (total, item) => total + item.subtotal,
       );
-      if (discountAmount < 0 || discountAmount > totalAmount) {
-        throw ArgumentError('Discount must be between zero and the subtotal.');
-      }
       final itemCount = items.fold<int>(0, (total, item) => total + item.units);
       final order = LocalOrderModel(
         localOrderId: orderId,
@@ -59,9 +55,7 @@ class LocalOrderRepository {
         bartenderId: bartenderId,
         paymentType: paymentType,
         status: 'COMPLETED',
-        totalAmount:
-            ((totalAmount - discountAmount) * 100).roundToDouble() / 100,
-        discountAmount: discountAmount,
+        totalAmount: (totalAmount * 100).roundToDouble() / 100,
         notes: notes,
         totalItemsCount: itemCount,
         syncStatus: 'PENDING',
@@ -95,7 +89,6 @@ class LocalOrderRepository {
     required String counterId,
     required String bartenderId,
     required List<CartItemModel> items,
-    double discountAmount = 0,
     String? notes,
   }) async {
     try {
@@ -104,17 +97,13 @@ class LocalOrderRepository {
         0,
         (total, item) => total + item.subtotal,
       );
-      if (discountAmount < 0 || discountAmount > subtotal) {
-        throw ArgumentError('Discount must be between zero and the subtotal.');
-      }
       final order = LocalOrderModel(
         localOrderId: _uuid.v4(),
         counterId: counterId,
         bartenderId: bartenderId,
         paymentType: 'CASH',
         status: 'HELD',
-        totalAmount: ((subtotal - discountAmount) * 100).roundToDouble() / 100,
-        discountAmount: discountAmount,
+        totalAmount: (subtotal * 100).roundToDouble() / 100,
         notes: notes,
         totalItemsCount: items.fold<int>(
           0,
@@ -326,6 +315,81 @@ class LocalOrderRepository {
     } catch (error, stackTrace) {
       _logger.e(
         'Unable to load today’s local orders',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+  }
+
+  Future<LocalOrderModel?> getOrder(String orderId) async {
+    try {
+      final db = await _localDb.database;
+      final rows = await db.query(
+        'local_orders',
+        where: 'local_order_id = ?',
+        whereArgs: [orderId],
+        limit: 1,
+      );
+      return rows.isEmpty ? null : LocalOrderModel.fromMap(rows.single);
+    } catch (error, stackTrace) {
+      _logger.e(
+        'Unable to load local order for submission',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+  }
+
+  Future<List<LocalOrderModel>> getOrdersAwaitingSubmission() async {
+    try {
+      final db = await _localDb.database;
+      final rows = await db.query(
+        'local_orders',
+        where: 'status = ? AND sync_status IN (?, ?)',
+        whereArgs: ['COMPLETED', 'PENDING', 'FAILED'],
+        orderBy: 'created_at ASC',
+      );
+      return rows.map(LocalOrderModel.fromMap).toList(growable: false);
+    } catch (error, stackTrace) {
+      _logger.e(
+        'Unable to load completed orders awaiting submission',
+        error: error,
+        stackTrace: stackTrace,
+      );
+      rethrow;
+    }
+  }
+
+  Future<void> updateSubmissionStatus({
+    required String orderId,
+    required String status,
+    String? errorMessage,
+    String? remoteOrderId,
+  }) async {
+    if (!const {'PENDING', 'SYNCED', 'FAILED'}.contains(status)) {
+      throw ArgumentError.value(status, 'status', 'Invalid sync status.');
+    }
+    try {
+      final values = <String, Object?>{
+        'sync_status': status,
+        'sync_error': errorMessage,
+      };
+      if (remoteOrderId != null) values['remote_order_id'] = remoteOrderId;
+      final db = await _localDb.database;
+      final updated = await db.update(
+        'local_orders',
+        values,
+        where: 'local_order_id = ? AND status = ?',
+        whereArgs: [orderId, 'COMPLETED'],
+      );
+      if (updated != 1) {
+        throw StateError('Completed local order was not found.');
+      }
+    } catch (error, stackTrace) {
+      _logger.e(
+        'Unable to update submission status for local order $orderId',
         error: error,
         stackTrace: stackTrace,
       );

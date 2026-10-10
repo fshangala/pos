@@ -3,18 +3,22 @@ import 'package:logger/logger.dart';
 
 import '../models/local_order_model.dart';
 import '../repositories/local_order_repository.dart';
+import '../repositories/order_submission_repository.dart';
 import 'pos_register_viewmodel.dart';
 
 class PosCheckoutViewModel extends ChangeNotifier {
   PosCheckoutViewModel({
     required LocalOrderRepository orderRepository,
+    required OrderSubmissionRepository submissionRepository,
     required PosRegisterViewModel registerViewModel,
     Logger? logger,
   }) : _orderRepository = orderRepository,
+       _submissionRepository = submissionRepository,
        _registerViewModel = registerViewModel,
        _logger = logger ?? Logger();
 
   final LocalOrderRepository _orderRepository;
+  final OrderSubmissionRepository _submissionRepository;
   final PosRegisterViewModel _registerViewModel;
   final Logger _logger;
 
@@ -22,6 +26,7 @@ class PosCheckoutViewModel extends ChangeNotifier {
   double tenderedAmount = 0;
   bool isSaving = false;
   String? errorMessage;
+  bool? uploadSucceeded;
 
   double get total => _registerViewModel.total;
   double get changeDue => (tenderedAmount - total).clamp(0, double.infinity);
@@ -51,6 +56,7 @@ class PosCheckoutViewModel extends ChangeNotifier {
     paymentType = 'CASH';
     tenderedAmount = 0;
     errorMessage = null;
+    uploadSucceeded = null;
     notifyListeners();
   }
 
@@ -61,6 +67,7 @@ class PosCheckoutViewModel extends ChangeNotifier {
     if (!canComplete) return null;
     isSaving = true;
     errorMessage = null;
+    uploadSucceeded = null;
     notifyListeners();
     try {
       final order = await _orderRepository.createCompletedOrder(
@@ -68,9 +75,20 @@ class PosCheckoutViewModel extends ChangeNotifier {
         bartenderId: bartenderId,
         paymentType: paymentType,
         items: _registerViewModel.cart,
-        discountAmount: _registerViewModel.discountAmount,
         notes: _registerViewModel.notes,
       );
+      try {
+        uploadSucceeded = await _submissionRepository.submitCompletedOrder(
+          order.localOrderId,
+        );
+      } catch (error, stackTrace) {
+        _logger.e(
+          'Order was saved locally but upload status could not be recorded',
+          error: error,
+          stackTrace: stackTrace,
+        );
+        uploadSucceeded = false;
+      }
       _registerViewModel.clearCart();
       tenderedAmount = 0;
       return order;

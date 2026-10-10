@@ -12,6 +12,7 @@ import 'core/theme/pos_theme.dart';
 import 'repositories/local_auth_repository.dart';
 import 'repositories/local_catalog_repository.dart';
 import 'repositories/local_order_repository.dart';
+import 'repositories/order_submission_repository.dart';
 import 'repositories/sync_repository.dart';
 import 'viewmodels/pos_app_viewmodel.dart';
 import 'viewmodels/pos_auth_viewmodel.dart';
@@ -116,6 +117,13 @@ class PosApplication extends StatelessWidget {
           ),
         ),
         Provider<SyncRepository?>.value(value: syncRepository),
+        Provider<OrderSubmissionRepository>(
+          create: (context) => OrderSubmissionRepository(
+            localOrderRepository: context.read<LocalOrderRepository>(),
+            syncRepository: context.read<SyncRepository?>(),
+            logger: logger,
+          ),
+        ),
         ChangeNotifierProvider<PosAppViewModel>(
           create: (context) => PosAppViewModel(
             catalogRepository: context.read<LocalCatalogRepository>(),
@@ -141,6 +149,7 @@ class PosApplication extends StatelessWidget {
         ChangeNotifierProvider<PosCheckoutViewModel>(
           create: (context) => PosCheckoutViewModel(
             orderRepository: context.read<LocalOrderRepository>(),
+            submissionRepository: context.read<OrderSubmissionRepository>(),
             registerViewModel: context.read<PosRegisterViewModel>(),
             logger: logger,
           ),
@@ -159,7 +168,11 @@ class PosApplication extends StatelessWidget {
           ),
         ),
         ChangeNotifierProvider<PosSyncViewModel>(
-          create: (_) => PosSyncViewModel(),
+          create: (context) => PosSyncViewModel(
+            localOrderRepository: context.read<LocalOrderRepository>(),
+            submissionRepository: context.read<OrderSubmissionRepository>(),
+            logger: logger,
+          ),
         ),
       ],
       child: MaterialApp(
