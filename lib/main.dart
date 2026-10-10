@@ -187,7 +187,9 @@ class _PosRootViewState extends State<PosRootView> {
     super.didChangeDependencies();
     if (!_didInitialize) {
       _didInitialize = true;
-      context.read<PosAppViewModel>().initialize();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.read<PosAppViewModel>().initialize();
+      });
     }
   }
 

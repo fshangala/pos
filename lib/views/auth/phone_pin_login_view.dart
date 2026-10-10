@@ -25,7 +25,9 @@ class _PhonePinLoginViewState extends State<PhonePinLoginView> {
     super.didChangeDependencies();
     if (!_didLoadProfiles) {
       _didLoadProfiles = true;
-      context.read<PosAuthViewModel>().loadProfiles();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.read<PosAuthViewModel>().loadProfiles();
+      });
     }
   }
 
